@@ -13,7 +13,7 @@ from config.settings import SYMBOL, PRICE_API_URL, PRICE_API_HEADERS, NEWS_API_U
 
 
 # === GEMINI CONFIG ===
-genai.configure(api_key="AIzaSyAolmRW2NKcmqd83Z-lnLp2oyNiocSm3c8")
+genai.configure(api_key=os.getenv("GEMINI_API_KEY", "AIzaSyAolmRW2NKcmqd83Z-lnLp2oyNiocSm3c8"))
 
 prompt_instruction = """
 You are a financial news summarizer. Create a concise 'Morning Brief' report for the given stock, using clear layman-friendly language. Follow this structure:
