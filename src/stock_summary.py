@@ -12,7 +12,7 @@ from config.settings import  PRICE_API_HEADERS, NEWS_API_URL, NEWS_API_PARAMS, T
 
 
 # Multiple Stock Symbols
-SYMBOLS = ["TCS", "tata steel"]
+SYMBOLS = ["tata steel","TCS","ITC","ICIC"]
 
 
 print(f"Total symbols to process: {len(SYMBOLS)}")
@@ -135,6 +135,6 @@ for symbol in SYMBOLS:
     try:
         process_stock(symbol)
         print(f"✅ Finished {symbol}, waiting before next request...")
-        time.sleep(30)
+        time.sleep(20)
     except Exception as e:
         print(f"❌ Error processing {symbol}: {e}")
