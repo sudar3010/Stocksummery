@@ -1,5 +1,6 @@
 import sys
 import os
+import time
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import requests
@@ -7,11 +8,14 @@ from datetime import datetime
 import google.generativeai as genai
 import urllib.parse
 import pytz
-from config.settings import SYMBOL, PRICE_API_URL, PRICE_API_HEADERS, NEWS_API_URL, NEWS_API_PARAMS, TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID
+from config.settings import  PRICE_API_HEADERS, NEWS_API_URL, NEWS_API_PARAMS, TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID
 
 
+# Multiple Stock Symbols
+SYMBOLS = ["TCS", "tata steel"]
 
 
+print(f"Total symbols to process: {len(SYMBOLS)}")
 # === GEMINI CONFIG ===
 genai.configure(api_key=os.getenv("GEMINI_API_KEY", "AIzaSyAolmRW2NKcmqd83Z-lnLp2oyNiocSm3c8"))
 
@@ -49,76 +53,88 @@ now_ist = datetime.now(ist)
 date_str = now_ist.strftime('%a, %d %b %Y %I:%M %p IST')
 print("---->",date_str)
 
-# === FETCH PRICE ===
-price_resp = requests.get(PRICE_API_URL, headers=PRICE_API_HEADERS)
-price_data = price_resp.json()
-last_price = price_data.get("last_price") or price_data.get("price")
+def process_stock(symbol):
+    print(f"\nProcessing {symbol}...")
+    
+    # === PRICE API CALL ===
+    price_api_url = f"https://indian-stock-exchange-api2.p.rapidapi.com/stock?name={symbol}"
+    price_resp = requests.get(price_api_url, headers=PRICE_API_HEADERS)
+    price_data = price_resp.json()
+    
+    # === Extract company info ===
+    company_info = None
+    peer_companies = []
+    if "peerCompanyList" in price_data:
+        peer_companies = price_data["peerCompanyList"]
+    elif "companyProfile" in price_data and "peerCompanyList" in price_data["companyProfile"]:
+        peer_companies = price_data["companyProfile"]["peerCompanyList"]
+    elif "stockDetailsReusableData" in price_data and "peerCompanyList" in price_data["stockDetailsReusableData"]:
+        peer_companies = price_data["stockDetailsReusableData"]["peerCompanyList"]
 
-# === EXTRACT COMPANY PRICE INFO FROM peerCompanyList ===
-peer_companies = []
-if "peerCompanyList" in price_data:
-    peer_companies = price_data["peerCompanyList"]
-elif "companyProfile" in price_data and "peerCompanyList" in price_data["companyProfile"]:
-    peer_companies = price_data["companyProfile"]["peerCompanyList"]
-elif "stockDetailsReusableData" in price_data and "peerCompanyList" in price_data["stockDetailsReusableData"]:
-    peer_companies = price_data["stockDetailsReusableData"]["peerCompanyList"]
+    for company in peer_companies:
+        if symbol.lower() in company.get("companyName", "").lower():
+            company_info = company
+            break
 
-company_info = None
-for company in peer_companies:
-    if company.get("companyName") == "Tata Consultancy Services":
-        company_info = company
-        break
+    # === Extract news content ===
+    news_content = ""
+    if company_info:
+        news_content += (
+            f"{company_info['companyName']}:\n"
+            f"Current Price: ₹{company_info['price']}\n"
+            f"52 Week High: ₹{company_info['yhigh']}\n"
+            f"52 Week Low: ₹{company_info['ylow']}\n\n"
+        )
 
-# === EXTRACT TOP 3 RECENT NEWS FROM PRICE DATA ===
-recent_news = price_data.get("recentNews", [])
-news_content = ""
-if company_info:
-    news_content += (
-        f"{company_info['companyName']}:\n"
-        f"Current Price: ₹{company_info['price']}\n"
-        f"52 Week High: ₹{company_info['yhigh']}\n"
-        f"52 Week Low: ₹{company_info['ylow']}\n\n"
+    recent_news = price_data.get("recentNews", [])
+    if recent_news:
+       news_content += "Top 3 Recent News from Price API:\n"
+       for i in [0, 1, 2]:
+         if i < len(recent_news):
+            news = recent_news[i]
+            news_content += f"- {news['headline']} ({news['date']})\n"
+            news_content += f"  {news['intro']}\n"
+            news_content += f"  {news['url']}\n"
+    else:
+       news_content += "No recent news found in price data.\n"
+
+
+    # === Summarization with Gemini ===
+    full_prompt = f"{prompt_instruction}\n{news_content}"
+    model = genai.GenerativeModel("gemini-2.5-flash")
+    response = model.generate_content(full_prompt)
+
+    # === Print ===
+    print(f"\n=== {symbol} Morning Brief — {date_str} ===")
+    if company_info:
+        print(f"Price info for {company_info['companyName']}:")
+        print(f"Current Price: ₹{company_info['price']}")
+        print(f"52 Week High: ₹{company_info['yhigh']}")
+        print(f"52 Week Low: ₹{company_info['ylow']}")
+    else:
+        print("No company info found.")
+
+    print("\nSummary:\n" + response.text)
+
+    # === Send to Telegram ===
+    telegram_message = response.text
+    send_text = (
+        f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
+        f"?chat_id={TELEGRAM_CHAT_ID}&text={urllib.parse.quote(telegram_message)}"
     )
-if recent_news:
-    news_content += "Top 3 Recent News from Price API:\n"
-    for news in recent_news[:3]:
-        news_content += f"- {news['headline']} ({news['date']})\n"
-        news_content += f"  {news['intro']}\n"
-        news_content += f"  {news['url']}\n"
-else:
-    news_content += "No recent news found in price data.\n"
-
-# === GEMINI SUMMARIZATION ===
-full_prompt = f"{prompt_instruction}\n{news_content}"
-model = genai.GenerativeModel("gemini-2.5-flash")
-response = model.generate_content(full_prompt)
+    resp = requests.get(send_text)
+    if resp.status_code == 200:
+        print(f"Summary for {symbol} sent to Telegram successfully!")
+    else:
+        print(f"Failed to send summary for {symbol}:", resp.text)
 
 
-
-# === DISPLAY ALL RESULTS ===
-if company_info:
-    print(f"\n=== {SYMBOL} Morning Brief — {date_str} ===")
-    print(f"Price info for {company_info['companyName']}:")
-    print(f"Current Price: ₹{company_info['price']}")
-    print(f"52 Week High: ₹{company_info['yhigh']}")
-    print(f"52 Week Low: ₹{company_info['ylow']}")
-else:
-    print(f"\n=== {SYMBOL} Morning Brief — {date_str} ===")
-    print("No price info found for Tata Consultancy Services.")
-
-print("\nSummary:\n" + response.text)
-
-
-# === SEND SUMMARY TO TELEGRAM ===
-telegram_message = response.text
-
-send_text = (
-    f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
-    f"?chat_id={TELEGRAM_CHAT_ID}&text={urllib.parse.quote(telegram_message)}"
-)
-
-resp = requests.get(send_text)
-if resp.status_code == 200:
-    print("Summary sent to Telegram successfully!")
-else:
-    print("Failed to send summary to Telegram:", resp.text)
+# === Main Loop for all stocks ===
+for symbol in SYMBOLS:
+    print(f"🔄 Starting {symbol}")
+    try:
+        process_stock(symbol)
+        print(f"✅ Finished {symbol}, waiting before next request...")
+        time.sleep(30)
+    except Exception as e:
+        print(f"❌ Error processing {symbol}: {e}")
