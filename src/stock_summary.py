@@ -12,7 +12,7 @@ from config.settings import  PRICE_API_HEADERS, NEWS_API_URL, NEWS_API_PARAMS, T
 from dateutil import parser
 
 # Multiple Stock Symbols
-SYMBOLS = ["ITC","TCS","tata steel","ICICI","KTKBANK"]
+SYMBOLS = ["TCS","ITC","ICICI","tata steel","KTKBANK"]
 
 
 print(f"Total symbols to process: {len(SYMBOLS)}")
@@ -98,6 +98,48 @@ def process_stock(symbol):
             f"52 Week High: ₹{company_info['yhigh']}\n"
             f"52 Week Low: ₹{company_info['ylow']}\n\n"
         )
+    investor_notes = []
+    try:
+            price = float(company_info.get("price", 0))
+            yhigh = float(company_info.get("yhigh", 0))
+            ylow = float(company_info.get("ylow", 0))
+            pe = float(company_info.get("priceToEarningsValueRatio", 0))
+            pb = float(company_info.get("priceToBookValueRatio", 0))
+            roe = float(company_info.get("returnOnAverageEquityTrailing12Month", 0))
+            net_margin = float(company_info.get("netProfitMarginPercentTrailing12Month", 0))
+            dividend_yield = float(company_info.get("dividendYieldIndicatedAnnualDividend", 0))
+            debt_to_equity = float(company_info.get("ltDebtPerEquityMostRecentFiscalYear", 0))
+            rating = company_info.get("overallRating", "").capitalize()
+            percent_change = float(company_info.get("percentChange", 0))
+
+            if pe < 8 and pb < 1:
+                investor_notes.append("💰 Potential Value Buy (Low P/E & P/B)")
+
+            if roe > 10 and net_margin > 20:
+                investor_notes.append("📈 Strong Profitability (High ROE & Net Margin)")
+
+            if dividend_yield > 2:
+                investor_notes.append(f"💵 Good Dividend Yield ({dividend_yield:.2f}%)")
+
+            if debt_to_equity > 15 and "bank" not in company_info.get("companyName", "").lower():
+                investor_notes.append(f"⚠️ High Leverage Risk (Debt/Equity: {debt_to_equity:.2f})")
+
+            if ylow > 0 and ((price - ylow) / ylow) * 100 < 5:
+                investor_notes.append("📉 Near 52-Week Low (Possible Buy Opportunity)")
+            if price > 0 and ((yhigh - price) / price) * 100 < 5:
+                investor_notes.append("📊 Near 52-Week High (Consider Profit Booking)")
+
+            if rating:
+                sentiment_emoji = "📈" if rating.lower() == "bullish" else "📉" if rating.lower() == "bearish" else "⚖️"
+                investor_notes.append(f"{sentiment_emoji} Market Sentiment: {rating}")
+
+            # Price drop alert
+            if percent_change <= -3:
+                investor_notes.append(f"🔻 Significant Drop Today ({percent_change:.2f}%) — Review Position")
+
+    except Exception as e:
+            print(f"⚠️ Error generating investor notes: {e}")
+    
 
     recent_news = price_data.get("recentNews", [])
     ist = pytz.timezone('Asia/Kolkata')
@@ -151,20 +193,12 @@ def process_stock(symbol):
     model = genai.GenerativeModel("gemini-2.5-flash")
     response = model.generate_content(full_prompt)
 
-    # === Print ===
-    print(f"\n=== {symbol} Morning Brief — {date_str} ===")
-    if company_info:
-        print(f"Price info for {company_info['companyName']}:")
-        print(f"Current Price: ₹{company_info['price']}")
-        print(f"52 Week High: ₹{company_info['yhigh']}")
-        print(f"52 Week Low: ₹{company_info['ylow']}")
-    else:
-        print("No company info found.")
-
-    print("\nSummary:\n" + response.text)
-
     #=== Send to Telegram ===
-    telegram_message = response.text
+        # === Build Telegram Message ===
+    telegram_message = f"**📌 Summary:**\n{response.text}\n\n"
+    if investor_notes:
+        telegram_message += "**💡 Investor Notes:**\n" + "\n".join(investor_notes)
+    print("Telegram Message:", telegram_message)
     send_text = (
         f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
         f"?chat_id={TELEGRAM_CHAT_ID}&text={urllib.parse.quote(telegram_message)}"
