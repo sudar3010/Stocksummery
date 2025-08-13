@@ -14,16 +14,18 @@ from dateutil import parser
 # Multiple Stock Symbols
 SYMBOLS = ["TCS","ITC","ICICI","tata steel","KTKBANK"]
 
+ist = pytz.timezone('Asia/Kolkata')
+current_dt = datetime.now(ist).strftime("%d-%b-%Y %H:%M")
 
 print(f"Total symbols to process: {len(SYMBOLS)}")
 # === GEMINI CONFIG ===
 genai.configure(api_key=os.getenv("GEMINI_API_KEY", "AIzaSyAolmRW2NKcmqd83Z-lnLp2oyNiocSm3c8"))
 
-prompt_instruction = """
+prompt_instruction = f"""
 You are a financial news summarizer. Create a concise 'Morning Brief' report for the given stock, using clear layman-friendly language. Follow this structure:
 
 1. **Header**  
-   Format: === {STOCK_SYMBOL} Morning Brief — {DATE TIME} ===
+    Format: === {{STOCK_SYMBOL}} Morning Brief — {current_dt} ===
 
 2. **Price Block**  
    - Show current price in ₹ (2 decimals)
