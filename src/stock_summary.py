@@ -100,47 +100,166 @@ def process_stock(symbol):
             f"52 Week High: ₹{company_info['yhigh']}\n"
             f"52 Week Low: ₹{company_info['ylow']}\n\n"
         )
-    investor_notes = []
     try:
-            price = float(company_info.get("price", 0))
-            yhigh = float(company_info.get("yhigh", 0))
-            ylow = float(company_info.get("ylow", 0))
-            pe = float(company_info.get("priceToEarningsValueRatio", 0))
-            pb = float(company_info.get("priceToBookValueRatio", 0))
-            roe = float(company_info.get("returnOnAverageEquityTrailing12Month", 0))
-            net_margin = float(company_info.get("netProfitMarginPercentTrailing12Month", 0))
-            dividend_yield = float(company_info.get("dividendYieldIndicatedAnnualDividend", 0))
-            debt_to_equity = float(company_info.get("ltDebtPerEquityMostRecentFiscalYear", 0))
-            rating = company_info.get("overallRating", "").capitalize()
-            percent_change = float(company_info.get("percentChange", 0))
+        investor_notes = []
+        score = 50  # Start from neutral
+        max_score = 100
+        min_score = 0
 
-            if pe < 8 and pb < 1:
-                investor_notes.append("💰 Potential Value Buy (Low P/E & P/B)")
+        # === BASIC DATA EXTRACTION ===
+        price = float(company_info.get("price", 0))
+        yhigh = float(company_info.get("yhigh", 0))
+        ylow = float(company_info.get("ylow", 0))
+        pe = float(company_info.get("priceToEarningsValueRatio", 0))
+        pb = float(company_info.get("priceToBookValueRatio", 0))
+        roe = float(company_info.get("returnOnAverageEquityTrailing12Month", 0))
+        net_margin = float(company_info.get("netProfitMarginPercentTrailing12Month", 0))
+        dividend_yield = float(company_info.get("dividendYieldIndicatedAnnualDividend", 0))
+        debt_to_equity = float(company_info.get("ltDebtPerEquityMostRecentFiscalYear", 0))
+        rating = company_info.get("overallRating", "").capitalize()
+        percent_change = float(company_info.get("percentChange", 0))
 
-            if roe > 10 and net_margin > 20:
-                investor_notes.append("📈 Strong Profitability (High ROE & Net Margin)")
+        # === LONG-TERM FUNDAMENTAL METRICS ===
+        eps_growth_5yr = 0.0
+        growth_data = price_data.get("keyMetrics", {}).get("growth", [])
+        for item in growth_data:
+          if item.get("key") == "ePSGrowthRate5Year":
+             eps_growth_5yr = float(item.get("value", 0))
+             break
+        print("EPS Growth Rate (5Y):", eps_growth_5yr)
 
-            if dividend_yield > 2:
-                investor_notes.append(f"💵 Good Dividend Yield ({dividend_yield:.2f}%)")
+# === Revenue Growth Rate (5 Year) ===
+        revenue_growth = 0.0
+        for item in growth_data:
+          if item.get("key") == "revenueGrowthRate5Year":
+             revenue_growth = float(item.get("value", 0))
+             break
 
-            if debt_to_equity > 15 and "bank" not in company_info.get("companyName", "").lower():
-                investor_notes.append(f"⚠️ High Leverage Risk (Debt/Equity: {debt_to_equity:.2f})")
+# === PEG Ratio (inside keyMetrics -> valuation) ===
+        peg_ratio = 0.0
+        valuation_data = price_data.get("keyMetrics", {}).get("valuation", [])
+        for item in valuation_data:
+          if item.get("key") == "pegRatio":
+            peg_ratio = float(item.get("value", 0))
+            break
 
-            if ylow > 0 and ((price - ylow) / ylow) * 100 < 5:
-                investor_notes.append("📉 Near 52-Week Low (Possible Buy Opportunity)")
-            if price > 0 and ((yhigh - price) / price) * 100 < 5:
-                investor_notes.append("📊 Near 52-Week High (Consider Profit Booking)")
+# === Dividend Growth (3 Year) (inside keyMetrics -> growth) ===
+        dividend_growth_5y = 0.0
+        for item in growth_data:
+         if item.get("key") == "growthRatePercentDividend3Year":
+            dividend_growth_5y = float(item.get("value", 0))
+            break
 
-            if rating:
-                sentiment_emoji = "📈" if rating.lower() == "bullish" else "📉" if rating.lower() == "bearish" else "⚖️"
-                investor_notes.append(f"{sentiment_emoji} Market Sentiment: {rating}")
+# === Free Cash Flow TTM (inside keyMetrics -> financialstrength) ===
+        fcf_yield = 0.0
+        financial_strength_data = price_data.get("keyMetrics", {}).get("financialstrength", [])
+        for item in financial_strength_data:
+           if item.get("key") == "freeCashFlowtrailing12Month":
+              fcf_yield = float(item.get("value", 0))
+              break
 
-            # Price drop alert
-            if percent_change <= -3:
-                investor_notes.append(f"🔻 Significant Drop Today ({percent_change:.2f}%) — Review Position")
+# === Beta (inside keyMetrics -> priceandvolume) ===
+        beta = 0.0
+        price_volume_data = price_data.get("keyMetrics", {}).get("priceandVolume", [])
+        for item in price_volume_data:
+           if item.get("key") == "beta":
+              try:
+                 beta_str = str(item.get("value", "0")).replace(",", ".")
+                 beta = float(beta_str)
+              except ValueError:
+                 beta = 0.0
+              break
+
+
+
+
+        # === VALUATION SIGNALS ===
+        if pe < 8 and pb < 1:
+            investor_notes.append("💰 Potential Value Buy — Low P/E & P/B suggest undervaluation")
+            score += 6
+        elif pe > 25 and pb > 4:
+            investor_notes.append("⚠️ Overvalued — High P/E & P/B")
+            score -= 6
+
+        if 0 < peg_ratio < 1:
+            investor_notes.append("📉 Undervalued vs. Growth — PEG < 1")
+            score += 5
+
+        # === PROFITABILITY ===
+        if roe > 10 and net_margin > 20:
+            investor_notes.append("📈 Strong Profitability — High ROE & Net Margin")
+            score += 6
+        elif roe < 5:
+            investor_notes.append("⚠️ Weak Profitability — Low ROE")
+            score -= 4
+
+        # === DIVIDEND ===
+        if dividend_yield > 2:
+            investor_notes.append(f"💵 Good Dividend Yield ({dividend_yield:.2f}%)")
+            score += 4
+        if dividend_growth_5y > 5:
+            investor_notes.append(f"💵 Consistent Dividend Growth ({dividend_growth_5y:.2f}% CAGR)")
+            score += 3
+
+        # === FINANCIAL HEALTH ===
+        if debt_to_equity > 2 and "bank" not in company_info.get("companyName", "").lower():
+            investor_notes.append(f"⚠️ High Leverage Risk — Debt/Equity: {debt_to_equity:.2f}")
+            score -= 6
+        elif debt_to_equity < 0.5:
+            investor_notes.append(f"🛡️ Strong Balance Sheet — Low Debt/Equity ({debt_to_equity:.2f})")
+            score += 3
+
+        if fcf_yield > 5:
+            investor_notes.append(f"💡 High Free Cash Flow Yield ({fcf_yield:.2f}%) — Strong Liquidity")
+            score += 4
+
+        # === GROWTH ===
+        if eps_growth_5yr > 10:
+            investor_notes.append(f"🚀 Strong Earnings Growth ({eps_growth_5yr:.2f}% CAGR over 5Y)")
+            score += 5
+        elif eps_growth_5yr < 0:
+            investor_notes.append(f"⚠️ Negative Earnings Growth ({eps_growth_5yr:.2f}%)")
+            score -= 6
+
+        if revenue_growth > 8:
+            investor_notes.append(f"📊 Healthy Revenue Growth ({revenue_growth:.2f}%)")
+            score += 4
+
+        # === VOLATILITY ===
+        if beta < 0.8:
+            investor_notes.append(f"🛡️ Low Volatility (Beta: {beta:.2f}) — Defensive Play")
+            score += 3
+        elif beta > 1.5:
+            investor_notes.append(f"⚡ High Volatility Risk (Beta: {beta:.2f})")
+            score -= 3
+
+        
+
+        # === PRICE POSITION ===
+        if ylow > 0 and ((price - ylow) / ylow) * 100 < 5:
+            investor_notes.append("📉 Near 52-Week Low — Possible Value Entry")
+            score += 2
+        if price > 0 and ((yhigh - price) / price) * 100 < 5:
+            investor_notes.append("📊 Near 52-Week High — Consider Profit Booking")
+            score -= 2
+
+        # === SENTIMENT ===
+        if rating:
+            sentiment_emoji = "📈" if rating.lower() == "bullish" else "📉" if rating.lower() == "bearish" else "⚖️"
+            investor_notes.append(f"{sentiment_emoji} Market Sentiment: {rating}")
+            score += 2 if rating.lower() == "bullish" else -2 if rating.lower() == "bearish" else 0
+
+        if percent_change <= -3:
+            investor_notes.append(f"🔻 Significant Drop Today ({percent_change:.2f}%) — Review Position")
+            score -= 1
+
+
+        # === FINAL SCORE RANGE ===
+        # score = max(min_score, min(max_score, score))
+        # investor_notes.append(f"📊 **Long-Term Attractiveness Score:** {score}/100")
 
     except Exception as e:
-            print(f"⚠️ Error generating investor notes: {e}")
+        print(f"⚠️ Error generating investor notes: {e}")
     
 
     recent_news = price_data.get("recentNews", [])
