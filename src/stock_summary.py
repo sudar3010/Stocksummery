@@ -21,7 +21,7 @@ from dateutil import parser
 
 genai.configure(api_key=os.getenv("GEMINI_API_KEY", "AIzaSyAolmRW2NKcmqd83Z-lnLp2oyNiocSm3c8"))
 
-SYMBOLS = ["TCS", "KTKBANK","tata steel","ITC","ICICI Bank"]
+SYMBOLS = ["tata steel"]
 STOCK_KEYWORDS = [
     "stock",
     "share",
