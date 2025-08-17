@@ -15,14 +15,13 @@ from config.settings import (
     NEWS_API_URL,
     NEWS_API_PARAMS,
     TELEGRAM_BOT_TOKEN,
-    TELEGRAM_CHAT_ID,
+    TELEGRAM_CHAT_ID,GNEWS_API_KEY, NEWSAPI_KEY
 )
 from dateutil import parser
-GNEWS_API_KEY = os.getenv("GNEWS_API_KEY", "b31ee22f579e68f9801f182b9217b962")
-NEWSAPI_KEY = os.getenv("NEWSAPI_KEY", "3ae1e0aeff514f348eb78a8101af020c")
+
 genai.configure(api_key=os.getenv("GEMINI_API_KEY", "AIzaSyAolmRW2NKcmqd83Z-lnLp2oyNiocSm3c8"))
 
-SYMBOLS = ["TCS", "KTKBANK","tata steel","ITC","ICICI Bank"]
+SYMBOLS = ["HDFC"]
 STOCK_KEYWORDS = [
     "stock",
     "share",
@@ -162,21 +161,21 @@ def fetch_price(symbol):
         min_score = 0
 
         # === BASIC DATA EXTRACTION ===
-        price = float(company_info.get("price", 0))
-        yhigh = float(company_info.get("yhigh", 0))
-        ylow = float(company_info.get("ylow", 0))
-        pe = float(company_info.get("priceToEarningsValueRatio", 0))
-        pb = float(company_info.get("priceToBookValueRatio", 0))
-        roe = float(company_info.get("returnOnAverageEquityTrailing12Month", 0))
-        net_margin = float(company_info.get("netProfitMarginPercentTrailing12Month", 0))
+        price = float(company_info.get("price") or 0)
+        yhigh = float(company_info.get("yhigh") or 0)
+        ylow = float(company_info.get("ylow") or 0)
+        pe = float(company_info.get("priceToEarningsValueRatio") or 0)
+        pb = float(company_info.get("priceToBookValueRatio") or 0)
+        roe = float(company_info.get("returnOnAverageEquityTrailing12Month") or 0)
+        net_margin = float(company_info.get("netProfitMarginPercentTrailing12Month") or 0)
         dividend_yield = float(
-            company_info.get("dividendYieldIndicatedAnnualDividend", 0)
+            company_info.get("dividendYieldIndicatedAnnualDividend") or 0
         )
         debt_to_equity = float(
-            company_info.get("ltDebtPerEquityMostRecentFiscalYear", 0)
+            company_info.get("ltDebtPerEquityMostRecentFiscalYear") or 0
         )
         rating = company_info.get("overallRating", "").capitalize()
-        percent_change = float(company_info.get("percentChange", 0))
+        percent_change = float(company_info.get("percentChange") or 0)
 
         # === LONG-TERM FUNDAMENTAL METRICS ===
         eps_growth_5yr = 0.0
@@ -191,7 +190,7 @@ def fetch_price(symbol):
         revenue_growth = 0.0
         for item in growth_data:
             if item.get("key") == "revenueGrowthRate5Year":
-                revenue_growth = float(item.get("value", 0))
+                revenue_growth = float(item.get("value") or 0)
                 break
 
         # === PEG Ratio (inside keyMetrics -> valuation) ===
@@ -199,14 +198,14 @@ def fetch_price(symbol):
         valuation_data = data.get("keyMetrics", {}).get("valuation", [])
         for item in valuation_data:
             if item.get("key") == "pegRatio":
-                peg_ratio = float(item.get("value", 0))
+                peg_ratio = float(item.get("value") or 0)
                 break
 
         # === Dividend Growth (3 Year) (inside keyMetrics -> growth) ===
         dividend_growth_5y = 0.0
         for item in growth_data:
             if item.get("key") == "growthRatePercentDividend3Year":
-                dividend_growth_5y = float(item.get("value", 0))
+                dividend_growth_5y = float(item.get("value") or 0)
                 break
 
         # === Free Cash Flow TTM (inside keyMetrics -> financialstrength) ===
@@ -216,7 +215,7 @@ def fetch_price(symbol):
         )
         for item in financial_strength_data:
             if item.get("key") == "freeCashFlowtrailing12Month":
-                fcf_yield = float(item.get("value", 0))
+                fcf_yield = float(item.get("value") or 0)
                 break
 
         # === Beta (inside keyMetrics -> priceandvolume) ===
