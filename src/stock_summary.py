@@ -4,7 +4,8 @@ import time
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-import requests
+import requests, urllib.parse, time, pytz
+
 from datetime import datetime, timedelta, timezone
 import google.generativeai as genai
 import urllib.parse
@@ -352,7 +353,34 @@ def fetch_price(symbol):
 
 
 # === Generate Summary ===
-def generate_summary(symbol):
+STYLE_CONFIG = {
+    "minimalist_pro": {
+        "header": "*{symbol} — {timestamp}*",
+        "price_block": "**Price**",
+        "notes_block": "**Key Insights**",
+        "divider": "— — — — —",
+        "closing": "*End of Brief*"
+    },
+    "impact_pulse": {
+        "header": "🚨 *{symbol} Snapshot — {timestamp}*",
+        "price_block": "💥 **Market Pulse**",
+        "notes_block": "🎯 **Investor Focus**",
+        "divider": "⚡⚡⚡⚡⚡",
+        "closing": "📌 *Review. React. Reassess.*"
+    },
+    "zen_flow": {
+        "header": "🌿 *{symbol} Morning Flow — {timestamp}*",
+        "price_block": "🌞 **Price Overview**",
+        "notes_block": "🧘 **Thesis Signals**",
+        "divider": "🌊🌊🌊🌊🌊",
+        "closing": "🪷 *Stay patient. Stay informed.*"
+    }
+}
+
+def generate_summary(symbol, style="minimalist_pro"):
+    # Load style config
+    config = STYLE_CONFIG.get(style, STYLE_CONFIG["minimalist_pro"])
+
     # Price
     price_info = fetch_price(symbol)
 
@@ -400,18 +428,27 @@ News:
         response = model.generate_content(prompt)
         news_summary = response.text
 
-    # === Final Message ===
+    # Final Message
     ist = pytz.timezone("Asia/Kolkata")
     now_ist = datetime.now(ist).strftime("%d-%b-%Y %H:%M")
 
-    final_msg = f"=== {symbol} Morning Brief — {now_ist} ===\n\n"
+    final_msg = config["header"].format(symbol=symbol, timestamp=now_ist) + "\n\n"
+
     if price_info:
         final_msg += (
-            f"**Price Block**\n- Current Price: ₹{price_info['price']}\n- Change: {price_info['change']}%\n- 52W High: ₹{price_info['yhigh']}\n- 52W Low: ₹{price_info['ylow']}\n\n **Investor Notes**\n - "
+            f"{config['price_block']}\n"
+            f"- Current Price: ₹{price_info['price']}\n"
+            f"- Change: {price_info['change']}%\n"
+            f"- 52W High: ₹{price_info['yhigh']}\n"
+            f"- 52W Low: ₹{price_info['ylow']}\n\n"
+            f"{config['notes_block']}\n- "
             + "\n- ".join(price_info["investor_notes"])
             + "\n\n"
         )
-    final_msg += f"{news_summary}"
+
+    final_msg += config["divider"] + "\n\n"
+    final_msg += news_summary + "\n\n"
+    final_msg += config["closing"]
 
     return final_msg
 
@@ -435,7 +472,7 @@ def send_to_telegram(message):
 # === Main Loop ===
 for symbol in SYMBOLS:
     print(f"🔄 Processing {symbol}")
-    summary = generate_summary(symbol)
+    summary = generate_summary(symbol, style="zen_flow")
     print(summary)
     send_to_telegram(summary)
     time.sleep(20)
