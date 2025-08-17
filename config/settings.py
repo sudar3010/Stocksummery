@@ -16,3 +16,6 @@ NEWS_API_PARAMS = {
 # Telegram Configuration
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
+
+GNEWS_API_KEY = os.getenv("GNEWS_API_KEY")
+NEWSAPI_KEY = os.getenv("NEWSAPI_KEY")
