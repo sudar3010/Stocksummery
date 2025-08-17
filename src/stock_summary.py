@@ -21,7 +21,7 @@ GNEWS_API_KEY = os.getenv("GNEWS_API_KEY", "b31ee22f579e68f9801f182b9217b962")
 NEWSAPI_KEY = os.getenv("NEWSAPI_KEY", "3ae1e0aeff514f348eb78a8101af020c")
 genai.configure(api_key=os.getenv("GEMINI_API_KEY", "AIzaSyAolmRW2NKcmqd83Z-lnLp2oyNiocSm3c8"))
 
-SYMBOLS = ["TCS"]
+SYMBOLS = ["TCS", "KTKBANK","tata steel","ITC","ICICI Bank"]
 STOCK_KEYWORDS = [
     "stock",
     "share",
