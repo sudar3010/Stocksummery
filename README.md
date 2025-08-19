@@ -1,6 +1,6 @@
 # Stock Summary Generator
 
-This Python script generates a morning brief for stock (TCS) including current price, 52-week high/low, and relevant news summary using Gemini AI. The summary is then sent to a Telegram channel.
+This Python script generates a morning brief for indian stock including current price, 52-week high/low, and relevant news summary using Gemini AI. The summary is then sent to a Telegram channel.
 
 ## Features
 
